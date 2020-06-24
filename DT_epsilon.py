@@ -2,21 +2,24 @@ import numpy as np
 from copy import deepcopy
 
 
-class ID3(object):
+class ID3_epsilon(object):
     def __init__(self):
         self.tree = None
 
-    def test(self, train):
+    def test(self, test):
         right = 0
         wrong = 0
-        for i in range(train.shape[0]):
-            if i != 80:
-                continue
-            if self.tree.classify(train[i]) == train[i][0]:
+        for i in range(test.shape[0]):
+            results = self.tree.classify(test[i])
+            if (results[0] + results[1] > 1):
+                # print(i ,'affected', results)
+                x = 1
+
+            if (results[0] > results[1] and test[i][0] == 0) or (results[1] >= results[0] and test[i][0] == 1):
                 right += 1
             else:
                 wrong += 1
-                print('wrongly classified ', i)
+                print('wrongly classified ', i, results)
         print('right answers: ', right)
         print('wrong answers: ',  wrong)
 
@@ -26,19 +29,21 @@ class ID3(object):
 
 
 class TreeModel(object):
-    def __init__(self, feature_used=[], min_size= 1):
+    def __init__(self, feature_used=[], min_size=9):
         self.threshold = None
         self.index = None
         self.left = None
         self.right = None
         self.label = None
         self.orig_data = None
+        self.epsilon = None
         self.min_size = min_size
         self.feature_used = feature_used
 
     def build(self, data):
         if self.orig_data is None:  # first time init
             self.orig_data = data
+            self.epsilon = [np.std(data[:, i]) * 0.1 for i in range(data.shape[1])]
 
         # checking if all in the same label
         if self.same_label(data) or self.min_size >= data.shape[0]:
@@ -57,16 +62,23 @@ class TreeModel(object):
         self.right.build(higher)
 
     def classify(self, sample):
-        if self.index is not None:
-            print ('index:', self.index, ' threshold:', self.threshold, ' sample val:', sample[self.index])
+        # print('index:', self.index, ' threshold:', self.threshold)
+        results = [0, 0]
         if self.label is None and self.right is None and self.left is None:
             print('not initail')
             return -1
         if self.label is not None:
-            return self.label
-        elif sample[self.index] <= self.threshold:
-            return self.left.classify(sample)
-        return self.right.classify(sample)
+            results[self.label] += 1
+            return results
+        if sample[self.index] <= self.threshold + self.epsilon[self.index]:
+            temp = self.left.classify(sample)
+            results[0] += temp[0]
+            results[1] += temp[1]
+        if sample[self.index] + self.epsilon[self.index] >= self.threshold:
+            temp = self.right.classify(sample)
+            results[0] += temp[0]
+            results[1] += temp[1]
+        return results
 
     @staticmethod
     def same_label(data):
@@ -75,13 +87,14 @@ class TreeModel(object):
             return True
         return False
 
-
     @staticmethod
     def get_common_label(data):
         num_of_ones = np.count_nonzero(data[:, :1])
         if num_of_ones > len(data) - num_of_ones:
             return 1
         return 0
+
+
 
     @staticmethod
     def information_gain(data, feature_used):
@@ -131,12 +144,11 @@ def entropy(a, b):
 def prepare_date():
     train_data = np.loadtxt('train.csv', delimiter=',', skiprows=1)
     test_data =  np.loadtxt('test.csv', delimiter=',', skiprows=1)
-    # train_y, train_x = np.split(train_data, [1], axis=1)
     return train_data, test_data
 
 
 def main():
-    id3_tree = ID3()
+    id3_tree = ID3_epsilon()
     train, test = prepare_date()
     id3_tree.train(train)
     id3_tree.test(test)
