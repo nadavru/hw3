@@ -29,7 +29,7 @@ class ID3_epsilon(object):
 
 
 class TreeModel(object):
-    def __init__(self, feature_used=[], min_size=9):
+    def __init__(self, min_size=9):
         self.threshold = None
         self.index = None
         self.left = None
@@ -38,12 +38,12 @@ class TreeModel(object):
         self.orig_data = None
         self.epsilon = None
         self.min_size = min_size
-        self.feature_used = feature_used
 
     def build(self, data):
         if self.orig_data is None:  # first time init
             self.orig_data = data
             self.epsilon = [np.std(data[:, i]) * 0.1 for i in range(data.shape[1])]
+            # self.epsilon = np.zeros(data.shape[1])  # for testing
 
         # checking if all in the same label
         if self.same_label(data) or self.min_size >= data.shape[0]:
@@ -51,13 +51,11 @@ class TreeModel(object):
             return
         # splitting the the tree
 
-        self.threshold, self.index, lower, higher = self.information_gain(data, self.feature_used)
-        self.feature_used.append(self.index)
-        if len(self.feature_used) == data.shape[1]-1:  # not consistent(-1 because label is not feature) :
-            self.label = self.get_common_label(data)
+        self.threshold, self.index, lower, higher = self.information_gain(data)
 
-        self.left = TreeModel(deepcopy(self.feature_used))
-        self.right = TreeModel(deepcopy(self.feature_used))
+
+        self.left = TreeModel()
+        self.right = TreeModel()
         self.left.build(lower)
         self.right.build(higher)
 
@@ -81,6 +79,20 @@ class TreeModel(object):
         return results
 
     @staticmethod
+    def same_data(data):
+        try:
+            if len(data) < 2:
+                return True
+            last = data[0]
+            for sample in data[1:]:
+                    if (last != sample).any():
+                        return False
+                    last = sample
+            return True
+        except:
+            return False
+
+    @staticmethod
     def same_label(data):
         num_of_ones = np.count_nonzero(data[:, :1])
         if num_of_ones == len(data) or num_of_ones == 0:
@@ -97,14 +109,12 @@ class TreeModel(object):
 
 
     @staticmethod
-    def information_gain(data, feature_used):
+    def information_gain(data):
         size = len(data)
         min_entropy = float('inf')
         best_feature_index = -1
         threshold = None
         for i in range(1, len(data[0])):  #skipping label
-            if i in feature_used:
-                continue
             min_entropy_local = float('inf')
             threshold_local = None
             unique_val = np.unique(data[:, i])

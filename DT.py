@@ -10,8 +10,7 @@ class ID3(object):
         right = 0
         wrong = 0
         for i in range(train.shape[0]):
-            if i != 80:
-                continue
+
             if self.tree.classify(train[i]) == train[i][0]:
                 right += 1
             else:
@@ -26,7 +25,7 @@ class ID3(object):
 
 
 class TreeModel(object):
-    def __init__(self, feature_used=[], min_size= 1):
+    def __init__(self, min_size=9):
         self.threshold = None
         self.index = None
         self.left = None
@@ -34,31 +33,28 @@ class TreeModel(object):
         self.label = None
         self.orig_data = None
         self.min_size = min_size
-        self.feature_used = feature_used
+
 
     def build(self, data):
         if self.orig_data is None:  # first time init
             self.orig_data = data
 
         # checking if all in the same label
-        if self.same_label(data) or self.min_size >= data.shape[0]:
+        if self.same_label(data) or self.min_size >= data.shape[0] or self.same_data(data):
             self.label = self.get_common_label(data)  #all the same
             return
         # splitting the the tree
 
-        self.threshold, self.index, lower, higher = self.information_gain(data, self.feature_used)
-        self.feature_used.append(self.index)
-        if len(self.feature_used) == data.shape[1]-1:  # not consistent(-1 because label is not feature) :
-            self.label = self.get_common_label(data)
-
-        self.left = TreeModel(deepcopy(self.feature_used))
-        self.right = TreeModel(deepcopy(self.feature_used))
+        self.threshold, self.index, lower, higher = self.information_gain(data)
+        self.left = TreeModel()
+        self.right = TreeModel()
         self.left.build(lower)
         self.right.build(higher)
 
     def classify(self, sample):
         if self.index is not None:
-            print ('index:', self.index, ' threshold:', self.threshold, ' sample val:', sample[self.index])
+            pass
+            # print('index:', self.index, ' threshold:', self.threshold, ' sample val:', sample[self.index])
         if self.label is None and self.right is None and self.left is None:
             print('not initail')
             return -1
@@ -79,23 +75,37 @@ class TreeModel(object):
     @staticmethod
     def get_common_label(data):
         num_of_ones = np.count_nonzero(data[:, :1])
-        if num_of_ones > len(data) - num_of_ones:
+        if num_of_ones >= len(data) - num_of_ones:
             return 1
         return 0
 
     @staticmethod
-    def information_gain(data, feature_used):
+    def same_data(data):
+        try:
+            if len(data) < 2:
+                return True
+            last = data[0]
+            for sample in data[1:]:
+                    if (last != sample).any():
+                        return False
+                    last = sample
+            return True
+        except:
+            return False
+
+
+
+    @staticmethod
+    def information_gain(data):
         size = len(data)
         min_entropy = float('inf')
         best_feature_index = -1
         threshold = None
         for i in range(1, len(data[0])):  #skipping label
-            if i in feature_used:
-                continue
             min_entropy_local = float('inf')
             threshold_local = None
             unique_val = np.unique(data[:, i])
-            for j in range(len(unique_val)-1):
+            for j in range(len(unique_val)):
                 lower = data[data[:, i] <= unique_val[j]]
                 higher = data[data[:, i] > unique_val[j]]
                 lower_ones = np.count_nonzero(lower[:, :1])
@@ -108,7 +118,7 @@ class TreeModel(object):
                 entropy_score = (len(lower) * lower_entropy_score + (len(higher)) * higher_entropy_score) / size
                 if entropy_score < min_entropy_local:
                     min_entropy_local = entropy_score
-                    threshold_local = (unique_val[j]  + unique_val[j+1]) /2
+                    threshold_local = (unique_val[j] + unique_val[j+1]) /2
                     best_lower_local = lower
                     best_higher_local = higher
             if min_entropy_local < min_entropy:
@@ -117,7 +127,6 @@ class TreeModel(object):
                 best_lower = best_lower_local
                 best_higher = best_higher_local
                 best_feature_index = i
-
         return threshold, best_feature_index, best_lower, best_higher
 
 
